@@ -215,6 +215,8 @@ def create_project(
     """Create a minimal BSIPA plugin project that builds without Visual Studio."""
 
     directory = Path(path).expanduser()
+    if directory.exists() and not directory.is_dir():
+        raise ProjectError(f"Path exists but is not a directory: {directory}")
     if directory.exists() and any(directory.iterdir()) and not force:
         raise ProjectError(
             f"Directory is not empty: {directory}",

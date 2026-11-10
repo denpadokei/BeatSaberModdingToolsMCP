@@ -1,5 +1,7 @@
 # Beat Saber Modding Tools MCP
 
+[![CI](https://github.com/denpadokei/BeatSaberModdingToolsMCP/actions/workflows/ci.yml/badge.svg)](https://github.com/denpadokei/BeatSaberModdingToolsMCP/actions/workflows/ci.yml)
+
 An MCP server and CLI that replace the **BeatSaberModdingTools** Visual Studio extension and
 **BeatSaberModdingTools.Tasks** MSBuild tasks when you build Beat Saber PC mods with an AI agent
 instead of Visual Studio.
