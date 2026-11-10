@@ -106,7 +106,7 @@ bsmt doctor
 | Beat Saber Reference Manager (add/remove DLLs) | `list_game_references`, `add_game_references`, `remove_game_references` |
 | Add Reference Paths (`ReferencePath`) | `set_game_directory(set_reference_path=true)` |
 | Reference copies for offline/CI builds | `copy_game_references` |
-| Project templates (official Visual Studio templates) | `create_project`, `list_templates` |
+| Project and item templates (official Visual Studio templates) | `create_project`, `add_item_template`, `list_templates` |
 | `GenerateManifest` | `generate_manifest` |
 | Version bumps (manifest + assembly together) | `set_version` |
 | `GetManifestInfo` / manifest validation | `read_manifest`, `validate_manifest` |
@@ -147,8 +147,8 @@ Read-only tools: `detect_game`, `build_environment`, `game_process_status`,
 `get_assembly_info`, `compare_versions`, `get_git_info`, `list_templates`.
 
 Mutating tools: `add_game_references`, `remove_game_references`, `set_game_directory`,
-`copy_game_references`, `create_project`, `generate_manifest`, `set_version`, `build_mod`,
-`package_mod`, `deploy_mod`, `replace_in_file`, `set_github_output`.
+`copy_game_references`, `create_project`, `add_item_template`, `generate_manifest`, `set_version`,
+`build_mod`, `package_mod`, `deploy_mod`, `replace_in_file`, `set_github_output`.
 
 ### Recommended workflow
 
@@ -192,6 +192,28 @@ bsmt create .\MyMod --template bare --templates-dir C:\source\UnityModdingTools.
 `$projectname$`, `$rootnamespace$`, `$guid1$`/`$guid2$`, `$targetframeworkversion$`,
 `$registeredorganization$`, `$year$`, simple `$if$`/`$endif$` conditions, and
 `ProjectItem` target mappings.
+
+### Item templates
+
+`add_item_template` adds the official item templates to an existing project:
+
+| key | Adds | Required references |
+|---|---|---|
+| `harmony-patch` | Harmony patch class | `0Harmony` |
+| `bsml-file` | `.bsml` file | — |
+| `bsml-viewcontroller` | `.cs` + `.bsml` view controller | `BSML`, `BeatSaber.ViewSystem` |
+| `monobehaviour` | MonoBehaviour class | — |
+
+```powershell
+bsmt item add .\MyMod --template harmony-patch --name MyPatch --directory Patches
+bsmt item add .\MyMod --template bsml-viewcontroller --name SettingsView --directory UI
+bsmt item add .\MyMod --template monobehaviour --name Runner --directory Behaviours
+```
+
+Required references are resolved from the project's `BeatSaberDir` (or `--game`) and added
+automatically; pass `--no-references` to skip that. For SDK-style projects the `.cs` files are
+included implicitly, while `.bsml` files are added as `<EmbeddedResource>` with
+`<DependentUpon>`. For legacy projects both `<Compile>` and `<EmbeddedResource>` items are added.
 
 ## Requirements and setup
 
@@ -266,6 +288,7 @@ bsmt package PROJECT [-c Release] [--extra SOURCE=DEST] [--include-manifest]
 bsmt deploy PROJECT [-c Release] [--game PATH]
 bsmt create PATH [--name NAME] [--id ID] [--author AUTHOR] [--template sdk|bare|core|disableable] [--templates-dir DIR]
 bsmt templates list [--templates-dir DIR]
+bsmt item add PROJECT --template harmony-patch|bsml-file|bsml-viewcontroller|monobehaviour --name NAME [--directory DIR] [--namespace NS] [--game DIR] [--no-references] [--no-project] [--force]
 bsmt replace FILE PATTERN SUBSTITUTE [--regex]
 bsmt github-output NAME VALUE [--path FILE]
 bsmt mcp
@@ -367,9 +390,9 @@ src/bsmt_mcp/
   assembly.py     AssemblyInfo/version comparison
   buildtools.py   MSBuild/dotnet, artifact, zip, deploy
   gitinfo.py      GetCommitInfo equivalent
-  templates.py    project scaffolding (SDK + official templates)
+  templates.py    project/item scaffolding
   vstemplate.py   Visual Studio .vstemplate expansion
-  template_data/  vendored UnityModdingTools.Templates.BeatSaber
+  template_data/  vendored UnityModdingTools.Templates.BeatSaber (projects + items)
   ops.py          shared operations for MCP + CLI
   server.py       MCP tool definitions
   cli.py          bsmt CLI

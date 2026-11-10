@@ -166,10 +166,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--templates-dir", help="Checkout of UnityModdingTools.Templates.BeatSaber")
     p.add_argument("--force", action="store_true")
 
-    p = sub.add_parser("templates", help="List project templates")
+    p = sub.add_parser("templates", help="List project/item templates")
     t = p.add_subparsers(dest="templates_command", required=True)
-    p_templates = t.add_parser("list", help="List available project templates")
+    p_templates = t.add_parser("list", help="List available templates")
     p_templates.add_argument("--templates-dir")
+
+    p = sub.add_parser("item", help="Add an item template to an existing project")
+    item = p.add_subparsers(dest="item_command", required=True)
+    p_item = item.add_parser("add", help="Add a Harmony patch, BSML view, BSML file or MonoBehaviour")
+    p_item.add_argument("project")
+    p_item.add_argument("--template", required=True, help="harmony-patch, bsml-file, bsml-viewcontroller, monobehaviour")
+    p_item.add_argument("--name", required=True, help="File/class name (without extension)")
+    p_item.add_argument("--directory", help="Subdirectory relative to the project (e.g. Views, Patches)")
+    p_item.add_argument("--namespace", help="Override the namespace")
+    p_item.add_argument("--templates-dir")
+    p_item.add_argument("--game", help="Game install used to add required references")
+    p_item.add_argument("--no-references", action="store_true", help="Do not add BSML/Harmony references")
+    p_item.add_argument("--force", action="store_true")
+    p_item.add_argument("--no-project", action="store_true", help="Only write files; do not edit the .csproj")
 
     p = sub.add_parser("replace", help="Replace text in a file")
     p.add_argument("file")
@@ -400,6 +414,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         elif args.command == "templates":
             result = templates.list_templates(args.templates_dir)
+        elif args.command == "item":
+            result = templates.add_item_template(
+                args.project,
+                template=args.template,
+                name=args.name,
+                directory=args.directory,
+                namespace=args.namespace,
+                templates_dir=args.templates_dir,
+                game_dir=args.game,
+                add_references=not args.no_references,
+                force=args.force,
+                add_to_project=not args.no_project,
+            )
         elif args.command == "replace":
             result = replace_in_file(
                 args.file,

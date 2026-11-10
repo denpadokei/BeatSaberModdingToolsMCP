@@ -33,3 +33,4 @@ jobs:
           uvx --from "git+https://github.com/${{ github.repository }}" bsmt doctor
           uvx --from "git+https://github.com/${{ github.repository }}" bsmt templates list
           uvx --from "git+https://github.com/${{ github.repository }}" bsmt create "$env:RUNNER_TEMP\bsmt-template-check" --name TemplateCheck --author CI --game-version 1.44.1 --template core
+          uvx --from "git+https://github.com/${{ github.repository }}" bsmt item add "$env:RUNNER_TEMP\bsmt-template-check" --template harmony-patch --name SmokePatch --directory Patches --no-references

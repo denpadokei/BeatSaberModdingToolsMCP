@@ -49,6 +49,20 @@ class TemplateInfo:
         }
 
 
+@dataclass
+class ExpandedItem:
+    path: Path
+    item_type: str | None
+    dependent_upon: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "path": str(self.path),
+            "item_type": self.item_type,
+            "dependent_upon": self.dependent_upon,
+        }
+
+
 def _local(element: Any) -> str:
     tag = element.tag
     if isinstance(tag, str) and tag.startswith("{"):
@@ -109,13 +123,15 @@ def parse_template(path: Path, *, source: str = "") -> TemplateInfo:
     )
 
 
-def discover_templates(root: Path, *, source: str = "") -> list[TemplateInfo]:
-    """Find every ``.vstemplate`` below ``root``."""
+def discover_templates(root: Path, *, source: str = "", template_type: str = "Project") -> list[TemplateInfo]:
+    """Find ``.vstemplate`` files below ``root`` (project templates by default)."""
 
     if not root.is_dir():
         raise ProjectError(f"Template directory does not exist: {root}")
     templates = [parse_template(path, source=source or str(root)) for path in sorted(root.rglob("*.vstemplate"))]
-    return [template for template in templates if template.template_type.lower() == "project"]
+    if not template_type:
+        return templates
+    return [template for template in templates if template.template_type.lower() == template_type.lower()]
 
 
 def resolve_templates_root(explicit: str | os.PathLike[str] | None = None) -> Path | None:
@@ -242,7 +258,6 @@ def build_parameters(
 
 def expand_template(template: TemplateInfo, destination: Path, parameters: dict[str, str]) -> list[Path]:
     """Write an instantiated project to ``destination`` and return its files."""
-
     try:
         tree = ET.parse(template.path)
     except (ET.ParseError, OSError) as exc:
@@ -296,3 +311,82 @@ def expand_template(template: TemplateInfo, destination: Path, parameters: dict[
             output.write_bytes(source.read_bytes())
         written.append(output)
     return written
+
+
+def _infer_item_type(path: str) -> str | None:
+    suffix = Path(path).suffix.lower()
+    if suffix == ".cs":
+        return "Compile"
+    if suffix == ".bsml":
+        return "EmbeddedResource"
+    if suffix in {".resx", ".png", ".jpg", ".txt", ".json", ".xml"}:
+        return "None"
+    return None
+
+
+def expand_item_template(
+    template: TemplateInfo,
+    destination: Path,
+    parameters: dict[str, str],
+    *,
+    file_input_name: str,
+    force: bool = False,
+) -> list[ExpandedItem]:
+    """Instantiate an ``Item`` template into ``destination``.
+
+    Paths containing the ``Name.cs/Name.bsml`` nesting used by the BSML
+    ViewController template are flattened to sibling files, which is what the
+    BSML loader expects at runtime.
+    """
+
+    try:
+        tree = ET.parse(template.path)
+    except (ET.ParseError, OSError) as exc:
+        raise ProjectError(f"Could not parse template: {template.path}", hint=str(exc)) from exc
+    root = tree.getroot()
+    content = _child(root, "TemplateContent")
+    if content is None:
+        raise ProjectError(f"Template has no TemplateContent element: {template.path}")
+
+    expanded: list[ExpandedItem] = []
+    for item in content:
+        if _local(item) != "ProjectItem":
+            continue
+        item_source = (item.text or "").strip()
+        if not item_source:
+            continue
+        source = template.folder / item_source
+        if not source.is_file():
+            raise ProjectError(
+                f"Template references a missing file: {source}",
+                hint="The template checkout may be incomplete; update or re-clone the template repository.",
+            )
+        replace = (item.get("ReplaceParameters") or "").lower() == "true"
+        target = item.get("TargetFileName") or f"{file_input_name}{source.suffix}"
+        target_name = substitute(target, parameters) if replace else target
+        normalized = target_name.replace("\\", "/")
+        # BSMLViewControllerTemplate targets "Name.cs/Name.bsml"; keep them siblings.
+        nested = f"{file_input_name}.cs/{file_input_name}.bsml"
+        if nested in normalized:
+            normalized = normalized.replace(nested, f"{file_input_name}.bsml")
+        relative = safe_relative_path(normalized)
+        output = destination / relative
+        if output.exists() and not force:
+            raise ProjectError(
+                f"Target file already exists: {output}",
+                hint="Pass force=True to overwrite, or choose another name.",
+            )
+        output.parent.mkdir(parents=True, exist_ok=True)
+        if replace:
+            text = source.read_text(encoding="utf-8-sig", errors="replace")
+            atomic_write_text(output, substitute(text, parameters), encoding="utf-8")
+        else:
+            output.write_bytes(source.read_bytes())
+        item_type = item.get("ItemType") or _infer_item_type(target_name)
+        dependent = item.get("DependentUpon")
+        if dependent and replace:
+            dependent = substitute(dependent, parameters)
+        expanded.append(ExpandedItem(path=output, item_type=item_type, dependent_upon=dependent))
+    if not expanded:
+        raise ProjectError(f"Template produced no files: {template.path}")
+    return expanded

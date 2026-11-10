@@ -1,4 +1,4 @@
-"""Scaffolding for a minimal BSIPA plugin project (BSMT template equivalent)."""
+"""Project and item template scaffolding (official VS templates + SDK style)."""
 
 from __future__ import annotations
 
@@ -10,8 +10,23 @@ from typing import Any
 from . import assembly, beatsaber, manifest, vstemplate
 from .errors import BsmtError, GameNotFoundError, ProjectError
 from .manifest import SCHEMA_URL
-from .project import add_references, load_project, set_game_properties
-from .util import atomic_write_text
+from .project import (
+    add_project_items,
+    load_project,
+    resolve_project_game_dir,
+    set_game_properties,
+)
+from .project import (
+    add_references as add_project_references,
+)
+from .util import atomic_write_text, safe_relative_path
+
+ITEM_TEMPLATE_REFERENCES: dict[str, list[str]] = {
+    "harmony-patch": ["0Harmony"],
+    "bsml-viewcontroller": ["BSML", "BeatSaber.ViewSystem"],
+    "bsml-file": [],
+    "monobehaviour": [],
+}
 
 CORE_REFERENCES = [
     "IPA.Loader",
@@ -321,7 +336,7 @@ def list_templates(templates_dir: str | os.PathLike[str] | None = None) -> dict[
     if root is not None:
         bundled = (Path(__file__).resolve().parent / "template_data" / "official").resolve()
         source = "bundled (denpadokei-dev)" if root.resolve() == bundled else str(root)
-        for template in vstemplate.discover_templates(root, source=source):
+        for template in vstemplate.discover_templates(root, source=source, template_type=None):
             entry = template.to_dict()
             entry["source"] = source
             entries.append(entry)
@@ -416,7 +431,7 @@ def _create_sdk_project(
         refs, missing = beatsaber.find_references(install, CORE_REFERENCES)
         if missing:
             warnings.append(f"Game DLLs not found: {', '.join(sorted(missing))}")
-        added = add_references(info, refs)
+        added = add_project_references(info, refs)
         result["references_added"] = added["added"]
         set_game_properties(info, game_dir=install.path)
         result["user_file"] = str(info.user_file)
@@ -456,7 +471,7 @@ def _create_official_project(
             "The official Visual Studio templates are not available.",
             hint="Pass templates_dir pointing to a clone of UnityModdingTools.Templates.BeatSaber.",
         )
-    templates = vstemplate.discover_templates(root)
+    templates = vstemplate.discover_templates(root, template_type="Project")
     template = vstemplate.find_template(templates, template_name)
     framework_version = _legacy_framework(target_framework)
     parameters = vstemplate.build_parameters(
@@ -552,6 +567,135 @@ def _create_official_project(
             "Add any missing references with add_game_references.",
             "Run build_mod with package=True (and deploy=True to copy into the game).",
         ],
+    }
+
+
+def _project_framework_version(info: Any) -> str:
+    value = (info.target_frameworks[0] if info.target_frameworks else "").lower()
+    if value.startswith("net") and not value.startswith("netstandard") and not value.startswith("netcoreapp"):
+        digits = value[3:]
+        if digits.isdigit() and len(digits) >= 2:
+            return ".".join(digits)
+    return "4.7.2"
+
+
+def add_item_template(
+    project: str | os.PathLike[str],
+    *,
+    template: str,
+    name: str,
+    directory: str | None = None,
+    namespace: str | None = None,
+    templates_dir: str | os.PathLike[str] | None = None,
+    game_dir: str | os.PathLike[str] | None = None,
+    add_references: bool = True,
+    force: bool = False,
+    add_to_project: bool = True,
+) -> dict[str, Any]:
+    """Add an official item template (Harmony patch, BSML view, ...) to a project."""
+
+    info = load_project(project)
+    root = vstemplate.resolve_templates_root(templates_dir)
+    if root is None:
+        raise BsmtError(
+            "The official item templates are not available.",
+            hint="Pass templates_dir pointing to a clone of UnityModdingTools.Templates.BeatSaber.",
+        )
+    item_templates = vstemplate.discover_templates(root, template_type="Item")
+    selected = vstemplate.find_template(item_templates, template)
+
+    raw_name = Path(name).stem
+    file_input = sanitize_identifier(raw_name)
+    if not file_input:
+        raise BsmtError("Item name cannot be empty.")
+    warnings: list[str] = []
+    if file_input != raw_name:
+        warnings.append(f"Item name was sanitized from {raw_name!r} to {file_input!r}.")
+
+    relative_dir = Path()
+    if directory and str(directory).strip():
+        try:
+            relative_dir = safe_relative_path(str(directory))
+        except ValueError as exc:
+            raise BsmtError(str(exc)) from exc
+    destination = info.directory / relative_dir
+    destination.mkdir(parents=True, exist_ok=True)
+
+    namespace_parts = [info.root_namespace, *[part for part in relative_dir.parts if part]]
+    target_namespace = namespace or ".".join(part for part in namespace_parts if part)
+    parameters = vstemplate.build_parameters(
+        project_name=info.assembly_name,
+        identifier=file_input,
+        target_framework_version=_project_framework_version(info),
+        author=info.get_property("Author"),
+        root_namespace=target_namespace,
+        extra={"fileinputname": file_input, "safeitemrootname": file_input},
+    )
+    expanded = vstemplate.expand_item_template(
+        selected,
+        destination,
+        parameters,
+        file_input_name=file_input,
+        force=force,
+    )
+    items = [
+        {
+            "path": entry.path,
+            "item_type": entry.item_type,
+            "dependent_upon": entry.dependent_upon,
+        }
+        for entry in expanded
+    ]
+    reference_changes: dict[str, Any] = {"added": [], "missing": [], "game_dir": None}
+    required = ITEM_TEMPLATE_REFERENCES.get(selected.key, [])
+    if add_references and required:
+        try:
+            install, _source, _candidates = resolve_project_game_dir(info, explicit=str(game_dir) if game_dir else None)
+        except BsmtError as exc:
+            warnings.append(f"Could not resolve the game to add item references: {exc}")
+        else:
+            found, missing = beatsaber.find_references(install, required)
+            if found:
+                reference_changes.update(add_project_references(info, found))
+            reference_changes.update(
+                {
+                    "game_dir": str(install.path),
+                    "missing": sorted(set(missing)),
+                    "required": required,
+                }
+            )
+            if missing:
+                warnings.append(f"Game DLLs not found for item references: {', '.join(sorted(missing))}")
+    project_changes = (
+        add_project_items(info, items)
+        if add_to_project
+        else {"added": [], "implicit": [], "skipped": [], "changed": False, "dry_run": False}
+    )
+
+    placeholders: list[str] = []
+    for entry in expanded:
+        try:
+            text = entry.path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if re.search(r"\$[A-Za-z0-9_]+\$", text):
+            placeholders.append(str(entry.path.relative_to(info.directory)))
+    if placeholders:
+        warnings.append("Some template parameters were left unresolved in: " + ", ".join(placeholders))
+
+    return {
+        "ok": True,
+        "project": str(info.path),
+        "template": selected.key,
+        "template_name": selected.name,
+        "template_source": selected.source,
+        "name": file_input,
+        "namespace": target_namespace,
+        "files": [str(entry.path) for entry in expanded],
+        "items": [entry.to_dict() for entry in expanded],
+        "project_changes": project_changes,
+        "reference_changes": reference_changes,
+        "warnings": warnings,
     }
 
 

@@ -301,10 +301,44 @@ def create_server() -> MCPServer:
         return result
 
     @tool(
+        name="add_item_template",
+        description=(
+            "Add an official item template to an existing project: harmony-patch, bsml-file, "
+            "bsml-viewcontroller or monobehaviour. Creates the files and updates the .csproj "
+            "(Compile/EmbeddedResource with DependentUpon)."
+        ),
+        annotations=WRITE,
+    )
+    def add_item_template_tool(
+        project: str,
+        template: str,
+        name: str,
+        directory: str | None = None,
+        namespace: str | None = None,
+        templates_dir: str | None = None,
+        game_dir: str | None = None,
+        add_references: bool = True,
+        force: bool = False,
+        add_to_project: bool = True,
+    ) -> dict[str, Any]:
+        return templates.add_item_template(
+            project,
+            template=template,
+            name=name,
+            directory=directory,
+            namespace=namespace,
+            templates_dir=templates_dir,
+            game_dir=game_dir,
+            add_references=add_references,
+            force=force,
+            add_to_project=add_to_project,
+        )
+
+    @tool(
         name="list_templates",
         description=(
-            "List project templates: the built-in SDK style plus the official BSIPA templates "
-            "(bare, core, disableable) vendored from UnityModdingTools.Templates.BeatSaber."
+            "List project and item templates: the built-in SDK style, the official BSIPA project templates "
+            "(bare, core, disableable) and the official item templates (Harmony patch, BSML file/view, MonoBehaviour)."
         ),
         annotations=READ_ONLY,
     )

@@ -5,5 +5,5 @@
   "vendored_at": "2026-11-10",
   "license": "MIT",
   "copyright": "Copyright (c) 2021 Zingabopp",
-  "note": "Project templates copied from the denpadokei-dev branch. Pass templates_dir to use a newer checkout."
+  "note": "Project and item templates copied from the denpadokei-dev branch. Pass templates_dir to use a newer checkout."
 }

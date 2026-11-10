@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "beat-saber-modding-tools-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP server and CLI that replace the BeatSaberModdingTools Visual Studio extension and MSBuild tasks when building Beat Saber mods without Visual Studio."
 readme = "README.md"
 license = "MIT"

@@ -18,7 +18,7 @@ def test_tool_catalog() -> None:
         server = create_server()
         tools = await server.list_tools()
         names = {tool.name for tool in tools}
-        assert len(tools) == 23
+        assert len(tools) == 24
         assert {
             "detect_game",
             "inspect_project",
@@ -28,6 +28,7 @@ def test_tool_catalog() -> None:
             "set_version",
             "create_project",
             "list_templates",
+            "add_item_template",
             "build_mod",
             "package_mod",
             "deploy_mod",
@@ -61,8 +62,34 @@ def test_list_templates_tool() -> None:
 
     result = run(check())
     assert result.is_error is False
-    keys = {entry["key"] for entry in result.structured_content["templates"]}
-    assert {"sdk", "core"} <= keys
+    entries = result.structured_content["templates"]
+    keys = {entry["key"] for entry in entries}
+    assert {"sdk", "core", "harmony-patch"} <= keys
+
+
+def test_add_item_template_tool(tmp_path) -> None:
+    from bsmt_mcp import templates
+
+    target = tmp_path / "Mod"
+    templates.create_project(target, name="Mod", author="Tester", game_version="1.44.1")
+
+    async def check():
+        server = create_server()
+        return await server.call_tool(
+            "add_item_template",
+            {
+                "project": str(target),
+                "template": "harmony-patch",
+                "name": "PatchOne",
+                "directory": "Patches",
+            },
+        )
+
+    result = run(check())
+    assert result.is_error is False
+    data = result.structured_content
+    assert (target / "Patches" / "PatchOne.cs").is_file()
+    assert data["project_changes"]["changed"] is False  # SDK projects include .cs implicitly
 
 
 def test_validate_manifest_without_arguments_is_tool_error() -> None:

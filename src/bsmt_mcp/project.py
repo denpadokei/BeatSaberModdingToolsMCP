@@ -712,6 +712,71 @@ def add_references(
     }
 
 
+def add_project_items(
+    info: ProjectInfo,
+    items: Iterable[dict[str, Any]],
+    *,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Add Compile/EmbeddedResource/None items for newly created item-template files."""
+
+    root = info.tree.getroot()
+    existing: set[str] = set()
+    for element in root.iter():
+        if _local(element.tag) not in {"Compile", "EmbeddedResource", "None", "Content"}:
+            continue
+        include = element.get("Include")
+        if include:
+            existing.add(include.replace("\\", "/").lstrip("./").lower())
+
+    added: list[str] = []
+    implicit: list[str] = []
+    skipped: list[str] = []
+    new_elements: list[Any] = []
+    sdk = info.sdk_style
+    for item in items:
+        path = Path(str(item["path"]))
+        if not path.is_absolute():
+            path = info.directory / path
+        try:
+            relative = path.resolve().relative_to(info.directory.resolve())
+        except ValueError as exc:
+            raise BsmtError(f"Item template wrote outside the project: {path}") from exc
+        include_posix = relative.as_posix()
+        include_key = include_posix.lower()
+        item_type = str(item.get("item_type") or ("Compile" if relative.suffix.lower() == ".cs" else "None"))
+        if sdk and item_type.lower() in {"compile", "none", "content"}:
+            implicit.append(include_posix)
+            continue
+        if sdk and item_type.lower() == "embeddedresource" and relative.suffix.lower() == ".resx":
+            implicit.append(include_posix)
+            continue
+        if include_key in existing:
+            skipped.append(include_posix)
+            continue
+        element = etree.Element(_qualified(info, item_type))
+        element.set("Include", str(relative))
+        dependent = item.get("dependent_upon")
+        if dependent:
+            child = etree.Element(_qualified(info, "DependentUpon"))
+            child.text = str(dependent)
+            element.append(child)
+        new_elements.append(element)
+        existing.add(include_key)
+        added.append(include_posix)
+
+    if new_elements and not dry_run:
+        _create_item_group(info, new_elements)
+        info.save()
+    return {
+        "added": added,
+        "implicit": implicit,
+        "skipped": skipped,
+        "changed": bool(new_elements),
+        "dry_run": dry_run,
+    }
+
+
 def remove_references(
     info: ProjectInfo,
     names: Iterable[str],

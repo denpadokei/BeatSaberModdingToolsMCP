@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from bsmt_mcp import templates
 from bsmt_mcp.cli import main
 
 
@@ -37,3 +38,28 @@ def test_inspect_cli(tmp_path, capsys) -> None:
     data = json.loads(captured.out)
     assert data["ok"] is True
     assert data["project"]["name"] == "TestMod"
+
+
+def test_item_add_cli(tmp_path, capsys) -> None:
+    target = tmp_path / "Mod"
+    templates.create_project(target, name="Mod", author="Tester", game_version="1.44.1")
+    code = main(
+        [
+            "item",
+            "add",
+            str(target),
+            "--template",
+            "harmony-patch",
+            "--name",
+            "PatchOne",
+            "--directory",
+            "Patches",
+            "--no-references",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code == 0
+    assert (target / "Patches" / "PatchOne.cs").is_file()
+    data = json.loads(captured.out)
+    assert data["ok"] is True
+    assert data["template"] == "harmony-patch"
