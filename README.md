@@ -21,6 +21,77 @@ uvx --from git+https://github.com/denpadokei/BeatSaberModdingToolsMCP bsmt-mcp
 
 ---
 
+## これは何か（日本語）
+
+このリポジトリは、**Beat Saber の PC Mod（BSIPA）を Visual Studio なしで開発・ビルドするための
+MCP サーバー**です。`BeatSaberModdingTools`（Visual Studio 拡張機能）と
+`BeatSaberModdingTools.Tasks`（MSBuild タスク）の主要機能を Python で再実装し、
+GitHub Copilot / Claude / Codex などの MCP クライアントや CLI から利用できます。
+
+### できること
+
+- Steam / Oculus / BS Manager のゲーム検出、`BeatSaberDir` / `GameDirectory` の設定
+- ゲーム DLL 参照の追加・削除、オフラインビルド用の `Refs` コピー
+- `manifest.json` の生成・検証・アセンブリへの埋め込み、`AssemblyInfo` とのバージョン同期
+- `dotnet` / MSBuild でのビルド、BeatMods 形式 zip の作成、`Plugins` / `IPA/Pending` への配置
+- 公式プロジェクトテンプレート（`bare` / `core` / `disableable`）
+- 公式アイテムテンプレート（Harmony / BSML / BSML ViewController / MonoBehaviour）
+- **24 個の MCP ツール**と `bsmt` CLI
+
+### すぐ使う
+
+```powershell
+# セットアップ確認（ゲーム・MSBuild・dotnet・git）
+uvx --from git+https://github.com/denpadokei/BeatSaberModdingToolsMCP bsmt doctor
+
+# MCP サーバーを単体で起動する場合
+uvx --from git+https://github.com/denpadokei/BeatSaberModdingToolsMCP bsmt-mcp
+```
+
+MCP クライアント設定（汎用）:
+
+```json
+{
+  "mcpServers": {
+    "beatSaberModdingTools": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/denpadokei/BeatSaberModdingToolsMCP",
+        "bsmt-mcp"
+      ]
+    }
+  }
+}
+```
+
+GitHub Copilot の設定は [GitHub Copilot での使い方](#github-copilot-での使い方) を参照してください。
+
+### 基本的な流れ
+
+1. `detect_game` — ゲームのインストールを検出
+2. `inspect_project` — 参照・`BeatSaberDir`・manifest の状態を確認
+3. `set_game_directory` — `BeatSaberDir` / `GameDirectory` を設定
+4. `add_game_references` — 不足しているゲーム DLL を追加
+5. `generate_manifest` / `set_version` — manifest とバージョンを整備
+6. `build_mod(package=true, deploy=true)` — ビルド、zip 作成、ゲームへ配置
+
+### テンプレート
+
+```powershell
+# プロジェクト作成（SDK スタイル / 公式テンプレート）
+uvx --from git+https://github.com/denpadokei/BeatSaberModdingToolsMCP bsmt create .\MyMod --name "My Mod"
+uvx --from git+https://github.com/denpadokei/BeatSaberModdingToolsMCP bsmt create .\MyMod --template core --game "D:\...\Beat Saber"
+
+# アイテム追加
+uvx --from git+https://github.com/denpadokei/BeatSaberModdingToolsMCP bsmt item add .\MyMod --template harmony-patch --name MyPatch --directory Patches
+uvx --from git+https://github.com/denpadokei/BeatSaberModdingToolsMCP bsmt item add .\MyMod --template bsml-viewcontroller --name SettingsView --directory UI
+```
+
+詳細なツール一覧・CLI・トラブルシューティングは以下の英語セクションに記載しています。
+
+---
+
 ## Quick start (MCP client)
 
 Add the server to your MCP client configuration. The exact wrapper key depends on the client
@@ -43,6 +114,62 @@ always the same.
 ```
 
 The first launch clones the repository, builds the wheel, and caches it. Later launches are fast.
+
+### GitHub Copilot での使い方
+
+VS Code（Copilot Chat）と GitHub Copilot CLI の両方に対応しています。
+
+**VS Code** — `%APPDATA%\Code\User\mcp.json`（Windows）の `servers` に追加:
+
+```json
+{
+  "servers": {
+    "beatSaberModdingTools": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/denpadokei/BeatSaberModdingToolsMCP",
+        "bsmt-mcp"
+      ]
+    }
+  }
+}
+```
+
+追加後、VS Code で `Developer: Reload Window` を実行し、コマンドパレットの
+`MCP: List Servers` から `beatSaberModdingTools` を開始・承認してください。
+
+**GitHub Copilot CLI** — `~/.copilot/mcp-config.json` の `mcpServers` に追加:
+
+```json
+{
+  "mcpServers": {
+    "beatSaberModdingTools": {
+      "type": "local",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/denpadokei/BeatSaberModdingToolsMCP",
+        "bsmt-mcp"
+      ],
+      "tools": ["*"],
+      "timeout": 900000
+    }
+  }
+}
+```
+
+CLI では次のコマンドでも追加できます:
+
+```powershell
+copilot mcp add beatSaberModdingTools --timeout 900000 -- uvx --from "git+https://github.com/denpadokei/BeatSaberModdingToolsMCP" bsmt-mcp
+copilot mcp list
+```
+
+`timeout` はビルドやパッケージ作成に余裕を持たせるため 15 分にしています。
+Copilot からは「この Mod を Release でビルドして zip を作って」のように依頼すると、
+`inspect_project` → `build_mod` などのツールが使われます。
 
 ### `uvx run git+<url>`
 
@@ -340,17 +467,23 @@ MCP サーバー兼 CLI です。`BeatSaberModdingTools` 拡張機能と `BeatSa
 - `manifest.json` の生成・検証・アセンブリへの埋め込み
 - MSBuild / dotnet でのビルド、BeatMods 形式 zip の作成、`Plugins` / `IPA/Pending` への配置
 - `AssemblyInfo` のバージョン比較、git 情報、`ReplaceInFile` 相当
+- 公式プロジェクトテンプレート（`bare` / `core` / `disableable`）と
+  アイテムテンプレート（Harmony / BSML / BSML ViewController / MonoBehaviour）
+- 24 個の MCP ツールと `bsmt` CLI
 
 ```json
 {
   "mcpServers": {
-    "beat-saber-modding-tools": {
+    "beatSaberModdingTools": {
       "command": "uvx",
       "args": ["--from", "git+https://github.com/denpadokei/BeatSaberModdingToolsMCP", "bsmt-mcp"]
     }
   }
 }
 ```
+
+GitHub Copilot（VS Code / Copilot CLI）の設定は
+[GitHub Copilot での使い方](#github-copilot-での使い方) に記載しています。
 
 `uvx` はパッケージ指定に `--from` が必要なので、`run` エイリアスも同梱しています。
 
