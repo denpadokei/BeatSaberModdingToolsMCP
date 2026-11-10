@@ -21,3 +21,12 @@ jobs:
         run: uv run ruff check src tests
       - name: Test
         run: uv run pytest -q
+
+  uvx-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install and run from the git URL used in the README
+        run: uvx --from "git+https://github.com/${{ github.repository }}" bsmt doctor

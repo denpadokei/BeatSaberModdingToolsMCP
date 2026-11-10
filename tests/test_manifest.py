@@ -67,6 +67,19 @@ def test_generate_manifest_roundtrip(tmp_path) -> None:
     assert result["base_version"] == "2.0.0"
 
 
+def test_generate_manifest_appends_file_lists(tmp_path) -> None:
+    base = dict(BASE, files=["Plugins/A.dll"], loadBefore=["Other"])
+    base_path = tmp_path / "manifest.json"
+    base_path.write_text(json.dumps(base), encoding="utf-8")
+    result = manifest.generate_manifest(
+        base_manifest=base_path,
+        target_path=base_path,
+        updates={"files": ["UserData/B.txt"], "loadBefore": ["Third"]},
+    )
+    assert result["manifest"]["files"] == ["Plugins/A.dll", "UserData/B.txt"]
+    assert result["manifest"]["loadBefore"] == ["Other", "Third"]
+
+
 def test_generate_manifest_requires_description(tmp_path) -> None:
     with pytest.raises(manifest.ManifestError):
         manifest.generate_manifest(

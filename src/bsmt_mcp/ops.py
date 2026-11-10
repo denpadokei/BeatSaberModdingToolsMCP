@@ -142,6 +142,11 @@ def inspect_project_data(project: str, configuration: str = "Debug") -> dict[str
         warnings.append("manifest.json is not embedded in the assembly. Run generate_manifest with embed=true.")
     if version_check.get("checked") and not version_check.get("match"):
         warnings.append("The assembly version does not match the manifest version.")
+    if (info.get_property("GenerateManifest") or "").strip().lower() == "true":
+        warnings.append(
+            "GenerateManifest=true: BeatSaberModdingTools.Tasks generates the manifest from project "
+            "properties at build time, so edits to the source manifest.json may not be what gets embedded."
+        )
     return {
         "ok": True,
         "project": project_summary(info, evaluated),

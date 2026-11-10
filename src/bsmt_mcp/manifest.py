@@ -280,6 +280,14 @@ def generate_manifest(
     payload = _normalize_inputs(updates or {})
     if "links" in payload:
         payload["links"] = {key: value for key, value in payload["links"].items() if value}
+    # BSMT's GenerateManifest appends item arrays to the base manifest instead of
+    # replacing them (Files, LoadBefore, LoadAfter).
+    for key in ("files", "loadBefore", "loadAfter"):
+        base_values = base.get(key)
+        new_values = payload.get(key)
+        if isinstance(base_values, list) and isinstance(new_values, list):
+            combined = list(base_values) + [value for value in new_values if value not in base_values]
+            payload[key] = combined
     manifest = _deep_merge(base, payload)
     if include_generated_by:
         misc = manifest.get("misc")

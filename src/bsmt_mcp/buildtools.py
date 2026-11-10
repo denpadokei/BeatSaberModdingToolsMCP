@@ -232,6 +232,12 @@ def build_mod(
             f"{version_check.get('assembly_version')}; Release builds with BeatSaberModdingTools.Tasks fail "
             "with BSMT01. Run set_version or update AssemblyInfo.cs."
         )
+    if (info.get_property("GenerateManifest") or "").strip().lower() == "true":
+        preflight.append(
+            "GenerateManifest=true: BSMT.Tasks generates the manifest from project properties, so the source "
+            "manifest.json is not what gets embedded. Prefer setting the Plugin*/Description properties or "
+            "set GenerateManifest=false to use the source manifest."
+        )
 
     started = time.monotonic()
     result = run_process(command, cwd=info.directory, timeout=options.timeout)
@@ -442,8 +448,9 @@ def _artifact_name(
     except Exception:
         commit = None
     parts = [assembly]
-    if base_version:
-        parts.append(str(base_version))
+    # BSMT uses the full PluginVersion (including prerelease labels) in ArtifactName.
+    if isinstance(version, str) and version:
+        parts.append(version)
     if game_version:
         parts.append(f"bs{game_version}")
     if commit:
