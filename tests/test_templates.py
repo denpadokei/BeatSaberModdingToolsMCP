@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import re
+from pathlib import Path
 
 from bsmt_mcp import manifest, templates
 from bsmt_mcp.errors import BsmtError
@@ -11,6 +13,47 @@ def test_sanitize_identifier() -> None:
     assert templates.sanitize_identifier("My Plugin") == "My_Plugin"
     assert templates.sanitize_identifier("123Mod") == "_123Mod"
     assert templates.sanitize_identifier("!!!") == "BeatSaberPlugin"
+
+
+def test_list_templates() -> None:
+    data = templates.list_templates()
+    keys = {entry["key"] for entry in data["templates"]}
+    assert {"sdk", "bare", "core", "disableable"} <= keys
+    assert data["ok"] is True
+
+
+def test_create_project_from_official_core_template(tmp_path) -> None:
+    target = tmp_path / "Core Mod"
+    result = templates.create_project(
+        target,
+        name="Core Mod",
+        author="Tester",
+        description="Official core template",
+        version="0.2.0",
+        game_version="1.44.1",
+        template="core",
+    )
+    assert result["ok"] is True
+    assert result["template"] == "core"
+    assert result["project_style"] == "legacy"
+    project = Path(result["project"])
+    info = load_project(project)
+    assert info.sdk_style is False
+    assert info.assembly_name == "Core_Mod"
+    assert "Core_ModController.cs" in {path.name for path in target.iterdir()}
+    assert (target / "Configuration" / "PluginConfig.cs").is_file()
+    assert (target / "Directory.Build.props").is_file()
+    assert (target / "manifest.json").is_file()
+    data = manifest.read_manifest_info(target / "manifest.json")
+    assert data["validation"]["valid"] is True
+    assert data["game_version"] == "1.44.1"
+    assert data["base_version"] == "0.2.0"
+    assembly_info = (target / "Properties" / "AssemblyInfo.cs").read_text(encoding="utf-8")
+    assert 'AssemblyVersion("0.2.0.0")' in assembly_info
+    for path in target.rglob("*"):
+        if path.is_file() and path.suffix.lower() in {".cs", ".csproj", ".json", ".props", ".user", ".md"}:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            assert not re.search(r"\$[A-Za-z0-9_]+\$", text), f"unresolved template parameter in {path}"
 
 
 def test_create_project_without_game(tmp_path) -> None:

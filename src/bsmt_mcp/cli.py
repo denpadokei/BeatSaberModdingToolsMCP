@@ -162,7 +162,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--game-version")
     p.add_argument("--game")
     p.add_argument("--framework", default="net472")
+    p.add_argument("--template", default="sdk", help="sdk (default), bare, core, disableable")
+    p.add_argument("--templates-dir", help="Checkout of UnityModdingTools.Templates.BeatSaber")
     p.add_argument("--force", action="store_true")
+
+    p = sub.add_parser("templates", help="List project templates")
+    t = p.add_subparsers(dest="templates_command", required=True)
+    p_templates = t.add_parser("list", help="List available project templates")
+    p_templates.add_argument("--templates-dir")
 
     p = sub.add_parser("replace", help="Replace text in a file")
     p.add_argument("file")
@@ -387,8 +394,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 game_version=args.game_version,
                 game_dir=args.game,
                 target_framework=args.framework,
+                template=args.template,
+                templates_dir=args.templates_dir,
                 force=args.force,
             )
+        elif args.command == "templates":
+            result = templates.list_templates(args.templates_dir)
         elif args.command == "replace":
             result = replace_in_file(
                 args.file,

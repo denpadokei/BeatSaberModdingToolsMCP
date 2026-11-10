@@ -18,7 +18,7 @@ def test_tool_catalog() -> None:
         server = create_server()
         tools = await server.list_tools()
         names = {tool.name for tool in tools}
-        assert len(tools) == 22
+        assert len(tools) == 23
         assert {
             "detect_game",
             "inspect_project",
@@ -26,6 +26,8 @@ def test_tool_catalog() -> None:
             "set_game_directory",
             "generate_manifest",
             "set_version",
+            "create_project",
+            "list_templates",
             "build_mod",
             "package_mod",
             "deploy_mod",
@@ -50,6 +52,17 @@ def test_compare_versions_tool() -> None:
     result = run(check())
     assert result.is_error is False
     assert result.structured_content["match"] is True
+
+
+def test_list_templates_tool() -> None:
+    async def check():
+        server = create_server()
+        return await server.call_tool("list_templates", {})
+
+    result = run(check())
+    assert result.is_error is False
+    keys = {entry["key"] for entry in result.structured_content["templates"]}
+    assert {"sdk", "core"} <= keys
 
 
 def test_validate_manifest_without_arguments_is_tool_error() -> None:

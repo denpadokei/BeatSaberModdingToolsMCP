@@ -14,6 +14,12 @@ This project is an independent reimplementation of the workflow provided by:
   denpadokei/BeatSaberModdingTools (fork)
   https://github.com/denpadokei/BeatSaberModdingTools
 
+  UnityModdingTools.Templates.BeatSaber (denpadokei-dev branch)
+  https://github.com/denpadokei/UnityModdingTools.Templates.BeatSaber
+  MIT License, Copyright (c) 2021 Zingabopp.
+  The official project templates are vendored under
+  src/bsmt_mcp/template_data/official/ and expanded by bsmt_mcp.vstemplate.
+
 No source code from those projects is included in this repository. The behavior
 of the MSBuild tasks (manifest generation/validation, version comparison, zip
 layout, copy-to-game) was reimplemented in Python so the same workflow can be

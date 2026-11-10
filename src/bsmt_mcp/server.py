@@ -301,10 +301,22 @@ def create_server() -> MCPServer:
         return result
 
     @tool(
+        name="list_templates",
+        description=(
+            "List project templates: the built-in SDK style plus the official BSIPA templates "
+            "(bare, core, disableable) vendored from UnityModdingTools.Templates.BeatSaber."
+        ),
+        annotations=READ_ONLY,
+    )
+    def list_templates_tool(templates_dir: str | None = None) -> dict[str, Any]:
+        return templates.list_templates(templates_dir)
+
+    @tool(
         name="create_project",
         description=(
-            "Scaffold a minimal BSIPA plugin project (SDK-style, net472, manifest embedded, BSMT.Tasks package) "
-            "that builds without Visual Studio. Writes into an empty directory."
+            "Scaffold a BSIPA plugin project. template='sdk' (default) is an SDK-style project that builds "
+            "without Visual Studio; template='bare'/'core'/'disableable' instantiates the official Visual Studio "
+            "templates from UnityModdingTools.Templates.BeatSaber (vendored, or a clone via templates_dir)."
         ),
         annotations=WRITE,
     )
@@ -318,6 +330,8 @@ def create_server() -> MCPServer:
         game_version: str | None = None,
         game_dir: str | None = None,
         target_framework: str = "net472",
+        template: str = "sdk",
+        templates_dir: str | None = None,
         force: bool = False,
     ) -> dict[str, Any]:
         return templates.create_project(
@@ -330,6 +344,8 @@ def create_server() -> MCPServer:
             game_version=game_version,
             game_dir=game_dir,
             target_framework=target_framework,
+            template=template,
+            templates_dir=templates_dir,
             force=force,
         )
 

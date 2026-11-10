@@ -765,14 +765,16 @@ def _append_child(element: Any, child: Any, element_indent: str) -> None:
     element.append(child)
 
 
-def _append_property_element(info: ProjectInfo, group: Any, name: str, value: str, group_indent: str) -> None:
-    element = etree.Element(_qualified(info, name))
+def _append_property_element(namespace: str | None, group: Any, name: str, value: str, group_indent: str) -> None:
+    qname = f"{{{namespace}}}{name}" if namespace else name
+    element = etree.Element(qname)
     element.text = value
     _append_child(group, element, group_indent)
 
 
 def _set_property_in_tree(info: ProjectInfo, tree: Any, name: str, value: str) -> tuple[str | None, bool]:
     root = tree.getroot()
+    namespace = root.nsmap.get(None)
     indent = _indent_width(root)
     target_group = None
     old_value: str | None = None
@@ -780,15 +782,19 @@ def _set_property_in_tree(info: ProjectInfo, tree: Any, name: str, value: str) -
         for element in group:
             if isinstance(element.tag, str) and _local(element.tag) == name:
                 old_value = element.text or ""
+                # Template placeholders often contain a comment child; replace it.
+                for child in list(element):
+                    element.remove(child)
                 element.text = value
                 return old_value, True
         if target_group is None:
             target_group = group
     _ensure_root_text(root, indent)
     if target_group is None:
-        target_group = etree.SubElement(root, _qualified(info, "PropertyGroup"))
+        qname = f"{{{namespace}}}PropertyGroup" if namespace else "PropertyGroup"
+        target_group = etree.SubElement(root, qname)
         target_group.tail = "\n"
-    _append_property_element(info, target_group, name, value, indent)
+    _append_property_element(namespace, target_group, name, value, indent)
     return None, True
 
 
