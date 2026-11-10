@@ -29,4 +29,7 @@ jobs:
         with:
           enable-cache: true
       - name: Install and run from the git URL used in the README
-        run: uvx --from "git+https://github.com/${{ github.repository }}" bsmt doctor
+        run: |
+          uvx --from "git+https://github.com/${{ github.repository }}" bsmt doctor
+          uvx --from "git+https://github.com/${{ github.repository }}" bsmt templates list
+          uvx --from "git+https://github.com/${{ github.repository }}" bsmt create "$env:RUNNER_TEMP\bsmt-template-check" --name TemplateCheck --author CI --game-version 1.44.1 --template core
