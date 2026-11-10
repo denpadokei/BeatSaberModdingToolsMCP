@@ -50,6 +50,16 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/bsmt_mcp"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src/bsmt_mcp",
+  "/tests",
+  "/README.md",
+  "/LICENSE",
+  "/NOTICE",
+  "/pyproject.toml",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

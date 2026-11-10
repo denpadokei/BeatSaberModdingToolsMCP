@@ -16,7 +16,7 @@ jobs:
       - name: Create environment
         run: |
           uv venv --python 3.12
-          uv pip install -e . --group dev
+          uv pip install --group dev .
       - name: Lint
         run: uv run ruff check src tests
       - name: Test

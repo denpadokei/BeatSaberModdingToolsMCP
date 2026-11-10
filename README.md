@@ -317,7 +317,9 @@ SDK スタイルなら **.NET SDK** が必要です。`bsmt doctor` で検出状
 git clone https://github.com/denpadokei/BeatSaberModdingToolsMCP
 cd BeatSaberModdingToolsMCP
 uv venv
-uv pip install -e . --group dev
+# Non-editable install: editable .pth files break on Windows paths containing
+# non-ASCII characters (Python reads .pth with the ANSI code page).
+uv pip install --group dev .
 uv run pytest
 uv run ruff check
 ```
