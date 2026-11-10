@@ -991,10 +991,12 @@ def copy_game_references(
             total_bytes += file.stat().st_size
     return {
         "destination": str(destination),
-        "copied": copied,
-        "skipped": skipped,
+        "copied": copied[:50],
         "copied_count": len(copied),
+        "copied_truncated": len(copied) > 50,
+        "skipped": skipped[:50],
         "skipped_count": len(skipped),
+        "skipped_truncated": len(skipped) > 50,
         "bytes": total_bytes,
     }
 

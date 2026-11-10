@@ -57,6 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_list.add_argument("--game")
     p_list.add_argument("--filter")
     p_list.add_argument("--missing", action="store_true")
+    p_list.add_argument("--limit", type=int, default=200)
     p_add = refs.add_parser("add", help="Add game references")
     p_add.add_argument("project")
     p_add.add_argument("--name", action="append", default=[])
@@ -172,6 +173,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--escape-backslash", action="store_true")
     p.add_argument("--dry-run", action="store_true")
 
+    p = sub.add_parser("github-output", help="Append NAME=VALUE to GITHUB_OUTPUT")
+    p.add_argument("name")
+    p.add_argument("value")
+    p.add_argument("--path")
+
     sub.add_parser("mcp", help="Run the MCP server on stdio")
     return parser
 
@@ -225,6 +231,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     game_dir=args.game,
                     filter_value=args.filter,
                     only_missing=args.missing,
+                    limit=args.limit,
                 )
             elif args.refs_command == "add":
                 result = ops.add_references_data(
@@ -391,6 +398,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 escape_backslash=args.escape_backslash,
                 dry_run=args.dry_run,
             )
+        elif args.command == "github-output":
+            from .fileops import set_action_output
+
+            result = set_action_output(args.name, args.value, args.path)
         else:  # pragma: no cover - argparse enforces commands
             raise BsmtError(f"Unknown command: {args.command}")
     except BsmtError as exc:

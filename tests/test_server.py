@@ -18,7 +18,7 @@ def test_tool_catalog() -> None:
         server = create_server()
         tools = await server.list_tools()
         names = {tool.name for tool in tools}
-        assert len(tools) == 21
+        assert len(tools) == 22
         assert {
             "detect_game",
             "inspect_project",
@@ -29,6 +29,7 @@ def test_tool_catalog() -> None:
             "build_mod",
             "package_mod",
             "deploy_mod",
+            "set_github_output",
         } <= names
         return tools
 

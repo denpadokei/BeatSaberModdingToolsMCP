@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -33,7 +34,8 @@ def replace_in_file(
     raw = path.read_bytes()
     encoding = "utf-8"
     text = ""
-    for candidate in ("utf-8-sig", "utf-8", "cp932", "latin-1"):
+    candidates = ("utf-8-sig", "utf-8", "cp932", "latin-1") if raw.startswith(b"\xef\xbb\xbf") else ("utf-8", "cp932", "latin-1")
+    for candidate in candidates:
         try:
             text = raw.decode(candidate)
             encoding = candidate
@@ -77,3 +79,21 @@ def replace_in_file(
         "old_size": len(text.encode("utf-8")),
         "new_size": len(new_text.encode("utf-8")),
     }
+
+
+def set_action_output(name: str, value: str, output_path: str | None = None) -> dict[str, Any]:
+    """Write ``NAME=VALUE`` to a GitHub Actions output file (BSMT SetActionOutput)."""
+
+    if not name or not name.strip():
+        raise BsmtError("Output name cannot be empty.")
+    target = output_path or os.environ.get("GITHUB_OUTPUT")
+    if not target:
+        raise BsmtError(
+            "GITHUB_OUTPUT is not set.",
+            hint="Pass output_path explicitly or run this inside a GitHub Actions step.",
+        )
+    path = Path(target)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(f"{name}={value}\n")
+    return {"ok": True, "path": str(path), "name": name, "value": value}

@@ -16,6 +16,7 @@ from mcp.types import ToolAnnotations
 from . import __version__, assembly, beatsaber, buildtools, manifest, ops, templates
 from .errors import BsmtError
 from .fileops import replace_in_file as _replace_in_file
+from .fileops import set_action_output as _set_action_output
 from .gitinfo import git_info
 from .project import (
     ProjectInfo,
@@ -201,7 +202,7 @@ def create_server() -> MCPServer:
         game_dir: str | None = None,
         filter: str | None = None,
         only_missing: bool = False,
-        limit: int = 500,
+        limit: int = 200,
     ) -> dict[str, Any]:
         return ops.list_references_data(project, game_dir, filter, only_missing, limit)
 
@@ -448,10 +449,14 @@ def create_server() -> MCPServer:
             try:
                 relative = target_path.resolve().relative_to(info.directory.resolve()).as_posix()
             except ValueError:
-                relative = "manifest.json"
-                warnings.append("Manifest was written outside the project; embedding uses manifest.json.")
-            info = load_project(info.path)
-            result["embed"] = ensure_manifest_embedded(info, manifest_rel=relative)
+                result["embed"] = {
+                    "changed": False,
+                    "reason": "Manifest was written outside the project directory; not embedded.",
+                }
+                result["warnings"].append("Manifest was written outside the project; it was not embedded.")
+            else:
+                info = load_project(info.path)
+                result["embed"] = ensure_manifest_embedded(info, manifest_rel=relative)
         check = assembly.compare_project_versions(load_project(info.path))
         if check.get("checked") and not check.get("match"):
             result["warnings"].append(
@@ -678,6 +683,14 @@ def create_server() -> MCPServer:
             escape_backslash=escape_backslash,
             dry_run=dry_run,
         )
+
+    @tool(
+        name="set_github_output",
+        description="Append NAME=VALUE to a GitHub Actions output file (GITHUB_OUTPUT or output_path).",
+        annotations=WRITE,
+    )
+    def set_github_output(name: str, value: str, output_path: str | None = None) -> dict[str, Any]:
+        return _set_action_output(name, value, output_path)
 
     return server
 

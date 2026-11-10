@@ -113,6 +113,7 @@ bsmt doctor
 | `ZipDir` / BeatMods release zip | `package_mod` |
 | `BSMT_CopyToPlugins` / `IPA/Pending` | `deploy_mod` |
 | `ReplaceInFile` | `replace_in_file` |
+| `SetActionOutput` | `set_github_output` |
 | Build without Visual Studio | `build_mod` |
 
 The behavior is modeled on:
@@ -145,7 +146,7 @@ Read-only tools: `detect_game`, `build_environment`, `game_process_status`,
 
 Mutating tools: `add_game_references`, `remove_game_references`, `set_game_directory`,
 `copy_game_references`, `create_project`, `generate_manifest`, `set_version`, `build_mod`,
-`package_mod`, `deploy_mod`, `replace_in_file`.
+`package_mod`, `deploy_mod`, `replace_in_file`, `set_github_output`.
 
 ### Recommended workflow
 
@@ -235,6 +236,7 @@ bsmt package PROJECT [-c Release] [--extra SOURCE=DEST] [--include-manifest]
 bsmt deploy PROJECT [-c Release] [--game PATH]
 bsmt create PATH [--name NAME] [--id ID] [--author AUTHOR]
 bsmt replace FILE PATTERN SUBSTITUTE [--regex]
+bsmt github-output NAME VALUE [--path FILE]
 bsmt mcp
 ```
 

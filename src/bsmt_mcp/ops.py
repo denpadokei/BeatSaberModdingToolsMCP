@@ -163,7 +163,7 @@ def list_references_data(
     game_dir: str | None = None,
     filter_value: str | None = None,
     only_missing: bool = False,
-    limit: int = 500,
+    limit: int = 200,
 ) -> dict[str, Any]:
     info = load_project(project) if project else None
     if info is not None:

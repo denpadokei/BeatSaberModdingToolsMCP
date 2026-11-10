@@ -14,8 +14,9 @@ ROOT = Path(__file__).resolve().parents[1]
 def main() -> int:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(ROOT / "src")
+    command = [sys.argv[1]] if len(sys.argv) > 1 else [sys.executable, "-m", "bsmt_mcp.server"]
     proc = subprocess.Popen(
-        [sys.executable, "-m", "bsmt_mcp.server"],
+        command,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
