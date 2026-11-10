@@ -74,6 +74,16 @@ def test_add_and_remove_references(tmp_path) -> None:
     assert {ref.name for ref in reloaded.references} == {"IPA.Loader"}
 
 
+def test_add_references_deduplicates_input(tmp_path) -> None:
+    path = write_project(tmp_path)
+    info = load_project(path)
+    duplicate = GameReference("Main", tmp_path / "Main.dll", "Beat Saber_Data\\Managed", 10)
+    result = add_references(info, [duplicate, duplicate])
+    assert result["added"] == ["Main"]
+    assert result["skipped"] == ["Main"]
+    assert len(load_project(path).references) == 1
+
+
 def test_remove_keeps_non_game_reference(tmp_path) -> None:
     content = SDK_CSPROJ.replace(
         "  </ItemGroup>\n</Project>",

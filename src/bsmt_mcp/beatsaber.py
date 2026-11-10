@@ -162,11 +162,14 @@ def version_from_version_file(game_dir: str | os.PathLike[str]) -> tuple[str | N
 
 
 def version_from_globalgamemanagers(game_dir: str | os.PathLike[str]) -> str | None:
-    """Extract the Unity player version using the same offset as BSMT/ModAssistant.
+    """Extract the game version from Unity's ``globalgamemanagers``.
 
-    The game stores ``public.app-category.games`` in ``globalgamemanagers``;
-    the game version string starts 136 bytes later. Reading bytes avoids the
-    ``Encoding.Default`` ambiguity of the original C# implementation.
+    The original BSMT/ModAssistant approach assumed the version started exactly
+    136 bytes after ``public.app-category.games``. That offset no longer holds in
+    newer Unity builds (BSMT returns nothing for 1.44.x), but the version string
+    is still stored near the marker as ``major.minor.patch_build``. Search the
+    surrounding block for that pattern, then fall back to the old offset for old
+    game versions.
     """
 
     path = Path(game_dir) / "Beat Saber_Data" / "globalgamemanagers"
@@ -177,17 +180,35 @@ def version_from_globalgamemanagers(game_dir: str | os.PathLike[str]) -> str | N
     index = data.find(_VERSION_MARKER)
     if index < 0:
         return None
+
+    window = data[index : index + 8192]
+    match = re.search(rb"(?<!\d)(\d{1,3}\.\d{1,3}\.\d{1,3})_(\d+)(?!\d)", window)
+    if match:
+        major_minor_patch = match.group(1).decode("ascii")
+        if not major_minor_patch.startswith("0.0."):
+            return f"{major_minor_patch}_{match.group(2).decode('ascii')}"
+
+    # Legacy layout: version starts 136 bytes after the marker.
     start = index + 136
     end = start
     while end < len(data) and data[end] not in _ILLEGAL_VERSION_BYTES:
         end += 1
-    if end <= start:
-        return None
-    try:
-        value = data[start:end].decode("utf-8", errors="strict").strip()
-    except UnicodeDecodeError:
-        value = data[start:end].decode("latin-1").strip()
-    return _valid_version_string(value)
+    if end > start:
+        try:
+            value = data[start:end].decode("utf-8", errors="strict").strip()
+        except UnicodeDecodeError:
+            value = data[start:end].decode("latin-1").strip()
+        match = re.match(r"^\d+\.\d+\.\d+(?:_\d+)?$", value)
+        if match and not value.startswith("0.0."):
+            return value
+
+    # Last resort: any ``x.y.z_build`` string in the file (Unity's own version
+    # looks like 2022.3.33f1 and does not match because of the trailing letter).
+    for match in re.finditer(rb"(?<!\d)(\d{1,3}\.\d{1,3}\.\d{1,3})_(\d+)(?!\d)", data):
+        major_minor_patch = match.group(1).decode("ascii")
+        if not major_minor_patch.startswith("0.0."):
+            return f"{major_minor_patch}_{match.group(2).decode('ascii')}"
+    return None
 
 
 def version_from_folder_name(path: str | os.PathLike[str]) -> str | None:
@@ -196,14 +217,22 @@ def version_from_folder_name(path: str | os.PathLike[str]) -> str | None:
 
 
 def detect_game_version(game_dir: str | os.PathLike[str]) -> tuple[str | None, str | None, str | None]:
-    """Return ``(version, build, source)`` for a game directory."""
+    """Return ``(version, build, source)`` for a game directory.
 
+    ``globalgamemanagers`` is the authoritative source because it ships with
+    the game data; BS Manager's ``BeatSaberVersion.txt`` can go stale when the
+    game is updated outside BS Manager, so it is only a fallback.
+    """
+
+    raw = version_from_globalgamemanagers(game_dir)
+    if raw:
+        match = re.match(r"^(\d+\.\d+\.\d+)(?:_(\d+))?$", raw)
+        if match:
+            return match.group(1), match.group(2), "globalgamemanagers"
+        return raw, None, "globalgamemanagers"
     version, build = version_from_version_file(game_dir)
     if version:
         return version, build, "BeatSaberVersion.txt"
-    version = version_from_globalgamemanagers(game_dir)
-    if version:
-        return version, None, "globalgamemanagers"
     version = version_from_folder_name(game_dir)
     if version:
         return version, None, "folder-name"

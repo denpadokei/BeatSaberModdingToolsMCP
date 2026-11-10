@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import logging
 import sys
 from pathlib import Path
@@ -50,6 +51,7 @@ Recommended workflow:
 3. `set_game_directory` — write BeatSaberDir/GameDirectory if unresolved.
 4. `add_game_references` — add missing game DLLs (presets: core, bsipa, bsml, sira).
 5. `generate_manifest` — merge/fix manifest.json and embed it in the assembly.
+   Use `set_version` when bumping the version (manifest + AssemblyInfo together).
 6. `build_mod` with package=true and deploy=true — build, zip and copy to the game.
 
 Notes:
@@ -92,9 +94,24 @@ def create_server() -> MCPServer:
         instructions=INSTRUCTIONS,
     )
 
+    def tool(name: str, description: str, annotations: ToolAnnotations):
+        """Register a tool and turn anticipated BsmtError failures into ToolError."""
+
+        def decorator(function):
+            @functools.wraps(function)
+            def wrapper(*args, **kwargs):
+                try:
+                    return function(*args, **kwargs)
+                except (BsmtError, ValueError) as exc:
+                    raise ToolError(str(exc)) from exc
+
+            return server.tool(name=name, description=description, annotations=annotations)(wrapper)
+
+        return decorator
+
     # -- discovery ---------------------------------------------------------
 
-    @server.tool(
+    @tool(
         name="detect_game",
         description=(
             "Detect Beat Saber installations (Steam, Oculus, BS Manager, BEATSABER_DIR) and their "
@@ -137,7 +154,7 @@ def create_server() -> MCPServer:
             "reference_dirs": beatsaber.describe_reference_dirs(chosen),
         }
 
-    @server.tool(
+    @tool(
         name="build_environment",
         description="Report the detected MSBuild, dotnet, git and Beat Saber installations plus setup recommendations.",
         annotations=READ_ONLY,
@@ -147,7 +164,7 @@ def create_server() -> MCPServer:
         data["ok"] = True
         return data
 
-    @server.tool(
+    @tool(
         name="game_process_status",
         description="Check whether Beat Saber.exe is currently running (deploy writes to IPA/Pending when it is).",
         annotations=READ_ONLY,
@@ -160,7 +177,7 @@ def create_server() -> MCPServer:
             "deploy_target": "IPA/Pending" if running else "Plugins",
         }
 
-    @server.tool(
+    @tool(
         name="inspect_project",
         description=(
             "Inspect a .csproj: SDK style, target frameworks, references, BeatSaberDir resolution, manifest, "
@@ -171,7 +188,7 @@ def create_server() -> MCPServer:
     def inspect_project(project: str, configuration: str = "Debug") -> dict[str, Any]:
         return ops.inspect_project_data(project, configuration)
 
-    @server.tool(
+    @tool(
         name="list_game_references",
         description=(
             "List DLLs in the game's Managed/Libs/Plugins folders with versions and whether the project "
@@ -190,7 +207,7 @@ def create_server() -> MCPServer:
 
     # -- project setup -----------------------------------------------------
 
-    @server.tool(
+    @tool(
         name="add_game_references",
         description=(
             "Add game DLL references to a project with HintPath rooted at $(BeatSaberDir). "
@@ -210,7 +227,7 @@ def create_server() -> MCPServer:
     ) -> dict[str, Any]:
         return ops.add_references_data(project, names, presets, game_dir, hint_root, force, dry_run)
 
-    @server.tool(
+    @tool(
         name="remove_game_references",
         description="Remove game DLL references from a project (only_game_references avoids removing framework/NuGet references).",
         annotations=DESTRUCTIVE,
@@ -231,7 +248,7 @@ def create_server() -> MCPServer:
         result.update({"ok": True, "project": str(info.path)})
         return result
 
-    @server.tool(
+    @tool(
         name="set_game_directory",
         description=(
             "Write BeatSaberDir and GameDirectory into the project, its .csproj.user, or Directory.Build.props. "
@@ -247,7 +264,7 @@ def create_server() -> MCPServer:
     ) -> dict[str, Any]:
         return ops.set_game_directory_data(project, game_dir, target, set_reference_path)
 
-    @server.tool(
+    @tool(
         name="copy_game_references",
         description=(
             "Copy game Managed/Libs/Plugins DLLs into a local Refs folder (default: the parent of the project "
@@ -282,7 +299,7 @@ def create_server() -> MCPServer:
             result["project_changes"] = changes
         return result
 
-    @server.tool(
+    @tool(
         name="create_project",
         description=(
             "Scaffold a minimal BSIPA plugin project (SDK-style, net472, manifest embedded, BSMT.Tasks package) "
@@ -317,7 +334,7 @@ def create_server() -> MCPServer:
 
     # -- manifest ----------------------------------------------------------
 
-    @server.tool(
+    @tool(
         name="read_manifest",
         description="Read and validate a BSIPA manifest.json (project manifest by default).",
         annotations=READ_ONLY,
@@ -342,7 +359,7 @@ def create_server() -> MCPServer:
         data["ok"] = True
         return data
 
-    @server.tool(
+    @tool(
         name="generate_manifest",
         description=(
             "Merge fields into manifest.json, validate against the BSIPA schema, write it, and (by default) "
@@ -435,9 +452,15 @@ def create_server() -> MCPServer:
                 warnings.append("Manifest was written outside the project; embedding uses manifest.json.")
             info = load_project(info.path)
             result["embed"] = ensure_manifest_embedded(info, manifest_rel=relative)
+        check = assembly.compare_project_versions(load_project(info.path))
+        if check.get("checked") and not check.get("match"):
+            result["warnings"].append(
+                f"Manifest version {check.get('manifest_version')} does not match assembly version "
+                f"{check.get('assembly_version')}; call set_version to update both."
+            )
         return result
 
-    @server.tool(
+    @tool(
         name="validate_manifest",
         description="Validate a manifest.json against the BSIPA metadata schema and BSIPA dependency rules.",
         annotations=READ_ONLY,
@@ -462,7 +485,7 @@ def create_server() -> MCPServer:
 
     # -- version / git -----------------------------------------------------
 
-    @server.tool(
+    @tool(
         name="get_assembly_info",
         description="Read the assembly version from Properties/AssemblyInfo.cs or SDK project properties and compare it with the manifest.",
         annotations=READ_ONLY,
@@ -485,7 +508,31 @@ def create_server() -> MCPServer:
             "evaluation_error": error,
         }
 
-    @server.tool(
+    @tool(
+        name="set_version",
+        description=(
+            "Set the manifest version and the AssemblyInfo/csproj version together. Use this for version bumps: "
+            "BeatSaberModdingTools.Tasks fails Release builds when the manifest and assembly versions differ."
+        ),
+        annotations=WRITE,
+    )
+    def set_version_tool(
+        project: str,
+        version: str,
+        update_manifest: bool = True,
+        update_assembly: bool = True,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        info = load_project(project)
+        return assembly.set_project_version(
+            info,
+            version,
+            update_manifest=update_manifest,
+            update_assembly=update_assembly,
+            dry_run=dry_run,
+        )
+
+    @tool(
         name="compare_versions",
         description="Compare a manifest SemVer version with an assembly version using BSMT rules (1.2.3 == 1.2.3.0, prerelease labels ignored).",
         annotations=READ_ONLY,
@@ -495,7 +542,7 @@ def create_server() -> MCPServer:
         data["ok"] = True
         return data
 
-    @server.tool(
+    @tool(
         name="get_git_info",
         description="Return commit hash, branch, modified state, origin URL and GitHub owner for the project repository.",
         annotations=READ_ONLY,
@@ -508,7 +555,7 @@ def create_server() -> MCPServer:
 
     # -- build / release ---------------------------------------------------
 
-    @server.tool(
+    @tool(
         name="build_mod",
         description=(
             "Build a mod with dotnet (SDK-style) or MSBuild.exe (legacy). Returns diagnostics, target path and "
@@ -556,7 +603,7 @@ def create_server() -> MCPServer:
                 response["deploy_error"] = str(exc)
         return response
 
-    @server.tool(
+    @tool(
         name="package_mod",
         description=(
             "Create a BeatMods-compatible release zip from an existing build (Plugins/... at the archive root). "
@@ -583,7 +630,7 @@ def create_server() -> MCPServer:
             include_manifest=include_manifest,
         )
 
-    @server.tool(
+    @tool(
         name="deploy_mod",
         description=(
             "Copy the built mod into the game: Plugins normally, or IPA/Pending/Plugins while Beat Saber is running "
@@ -606,7 +653,7 @@ def create_server() -> MCPServer:
 
     # -- utility -----------------------------------------------------------
 
-    @server.tool(
+    @tool(
         name="replace_in_file",
         description="Replace text in a file (literal or regular expression), mirroring BSMT's ReplaceInFile task.",
         annotations=WRITE,
@@ -643,3 +690,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

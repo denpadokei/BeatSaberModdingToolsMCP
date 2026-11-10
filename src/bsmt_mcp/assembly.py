@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .errors import BsmtError, ManifestError
-from .manifest import is_semver, strip_version_label
-from .project import ProjectInfo
+from .manifest import is_semver, load_manifest, strip_version_label
+from .project import ProjectInfo, set_property_values
+from .util import atomic_write_text, read_text_auto
 
 _ASSEMBLY_VERSION_RE = re.compile(
     r"\[\s*assembly\s*:\s*(?:global::)?(?:System\.Reflection\.)?AssemblyVersion(?:Attribute)?\s*\(\s*\"([^\"]+)\"\s*\)"
@@ -19,6 +21,12 @@ _ASSEMBLY_FILE_VERSION_RE = re.compile(
 )
 _ASSEMBLY_INFO_VERSION_RE = re.compile(
     r"\[\s*assembly\s*:\s*(?:global::)?(?:System\.Reflection\.)?AssemblyInformationalVersion(?:Attribute)?\s*\(\s*\"([^\"]+)\"\s*\)"
+)
+_ASSEMBLY_VERSION_SUB_RE = re.compile(
+    r"(\[\s*assembly\s*:\s*(?:global::)?(?:System\.Reflection\.)?AssemblyVersion(?:Attribute)?\s*\(\s*\")([^\"]+)(\")"
+)
+_ASSEMBLY_FILE_VERSION_SUB_RE = re.compile(
+    r"(\[\s*assembly\s*:\s*(?:global::)?(?:System\.Reflection\.)?AssemblyFileVersion(?:Attribute)?\s*\(\s*\")([^\"]+)(\")"
 )
 
 
@@ -218,3 +226,126 @@ def compare_project_versions(
         "comparison": comparison,
         "assembly": assembly,
     }
+
+
+def set_project_version(
+    project: ProjectInfo,
+    version: str,
+    *,
+    update_manifest: bool = True,
+    update_assembly: bool = True,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Set the manifest version and the AssemblyInfo/csproj version together.
+
+    BeatSaberModdingTools.Tasks compares ``AssemblyVersion`` with the manifest in
+    Release builds and fails on a mismatch (BSMT01), so keeping both in sync is
+    part of a normal version bump.
+    """
+
+    if not is_semver(version):
+        raise ManifestError(
+            f"Not a valid SemVer version: {version!r}",
+            hint="Use a SemVer version such as 1.2.3 or 1.2.3-beta.1.",
+        )
+    base = strip_version_label(version)
+    assembly_version = f"{base}.0"
+    changes: list[dict[str, Any]] = []
+    warnings: list[str] = []
+
+    if update_assembly:
+        assembly_info_path = project.directory / "Properties" / "AssemblyInfo.cs"
+        if assembly_info_path.is_file():
+            text = read_text_auto(assembly_info_path)
+            new_text = text
+            matched_any = False
+            for regex, label in (
+                (_ASSEMBLY_VERSION_SUB_RE, "AssemblyVersion"),
+                (_ASSEMBLY_FILE_VERSION_SUB_RE, "AssemblyFileVersion"),
+            ):
+                matches = list(regex.finditer(new_text))
+                if not matches:
+                    continue
+                matched_any = True
+                old_value = matches[0].group(2)
+                new_text = regex.sub(
+                    lambda match, value=assembly_version: f"{match.group(1)}{value}{match.group(3)}",
+                    new_text,
+                )
+                changes.append(
+                    {
+                        "file": str(assembly_info_path),
+                        "property": label,
+                        "old": old_value,
+                        "new": assembly_version,
+                    }
+                )
+            if matched_any:
+                if not dry_run:
+                    atomic_write_text(assembly_info_path, new_text, encoding="utf-8")
+            else:
+                warnings.append(
+                    f"No AssemblyVersion/AssemblyFileVersion attribute was found in {assembly_info_path}."
+                )
+        else:
+            if dry_run:
+                changes.append(
+                    {
+                        "file": str(project.path),
+                        "property": "Version",
+                        "old": project.get_property("Version") or None,
+                        "new": version,
+                    }
+                )
+            else:
+                result = set_property_values(project, {"Version": version}, target="project")
+                changes.extend(result["changes"])
+            if not project.sdk_style:
+                warnings.append(
+                    "This is a legacy (non-SDK) project without Properties/AssemblyInfo.cs; the MSBuild "
+                    "Version property does not change the assembly version there. Create AssemblyInfo.cs "
+                    "or pass update_assembly=false."
+                )
+
+    manifest_path = project.manifest_path()
+    if update_manifest:
+        if manifest_path is None:
+            warnings.append("No manifest.json was found; only the assembly version was updated.")
+        else:
+            data = load_manifest(manifest_path)
+            old_version = data.get("version")
+            data["version"] = version
+            changes.append(
+                {
+                    "file": str(manifest_path),
+                    "property": "version",
+                    "old": old_version,
+                    "new": version,
+                }
+            )
+            if not dry_run:
+                atomic_write_text(
+                    manifest_path,
+                    json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+                    encoding="utf-8",
+                )
+
+    comparison = None
+    if not dry_run:
+        # Reload from disk so the comparison reflects the writes above.
+        from .project import load_project
+
+        updated = load_project(project.path)
+        comparison = compare_project_versions(updated)
+    return {
+        "ok": True,
+        "project": str(project.path),
+        "version": version,
+        "base_version": base,
+        "assembly_version": assembly_version,
+        "changes": changes,
+        "warnings": warnings,
+        "dry_run": dry_run,
+        "comparison": comparison,
+    }
+

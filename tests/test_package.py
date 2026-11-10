@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 import zipfile
 from pathlib import Path
 
@@ -8,7 +10,7 @@ import pytest
 
 from bsmt_mcp import buildtools
 from bsmt_mcp.project import load_project
-from bsmt_mcp.util import safe_relative_path
+from bsmt_mcp.util import remove_tree, safe_relative_path
 
 CSPROJ = """<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
@@ -89,6 +91,16 @@ def test_create_zip_deterministic(tmp_path) -> None:
     with zipfile.ZipFile(first) as archive:
         assert archive.namelist() == ["Plugins/Test.dll"]
         assert archive.infolist()[0].date_time == (1980, 1, 1, 0, 0, 0)
+
+
+def test_remove_tree_readonly(tmp_path) -> None:
+    target = tmp_path / "tree"
+    (target / "sub").mkdir(parents=True)
+    file = target / "sub" / "file.bin"
+    file.write_bytes(b"x")
+    os.chmod(file, stat.S_IREAD)
+    remove_tree(target)
+    assert not target.exists()
 
 
 def test_package_mod(tmp_path, monkeypatch) -> None:

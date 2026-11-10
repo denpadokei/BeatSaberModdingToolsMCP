@@ -18,13 +18,14 @@ def test_tool_catalog() -> None:
         server = create_server()
         tools = await server.list_tools()
         names = {tool.name for tool in tools}
-        assert len(tools) == 20
+        assert len(tools) == 21
         assert {
             "detect_game",
             "inspect_project",
             "add_game_references",
             "set_game_directory",
             "generate_manifest",
+            "set_version",
             "build_mod",
             "package_mod",
             "deploy_mod",
@@ -57,6 +58,16 @@ def test_validate_manifest_without_arguments_is_tool_error() -> None:
 
     with pytest.raises(ToolError):
         run(check())
+
+
+def test_anticipated_bsmterror_becomes_tool_error() -> None:
+    async def check():
+        server = create_server()
+        return await server.call_tool("inspect_project", {"project": "does-not-exist"})
+
+    with pytest.raises(ToolError) as exc_info:
+        run(check())
+    assert "Project path does not exist" in str(exc_info.value)
 
 
 def test_detect_game_tool() -> None:

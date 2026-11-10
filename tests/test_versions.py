@@ -65,3 +65,40 @@ def test_parse_assembly_info_mismatch(tmp_path) -> None:
     info = assembly.parse_assembly_info(path)
     assert info.assembly_version == "1.2.3.4"
     assert info.warnings
+
+
+def test_set_project_version(tmp_path) -> None:
+    import json
+
+    from bsmt_mcp.project import load_project
+
+    (tmp_path / "Properties").mkdir()
+    (tmp_path / "Properties" / "AssemblyInfo.cs").write_text(
+        '[assembly: AssemblyVersion("1.0.0.0")]\n[assembly: AssemblyFileVersion("1.0.0.0")]\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "TestMod.csproj").write_text(
+        '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net472</TargetFramework></PropertyGroup></Project>',
+        encoding="utf-8",
+    )
+    (tmp_path / "manifest.json").write_text(
+        json.dumps(
+            {
+                "id": "TestMod",
+                "name": "TestMod",
+                "author": "x",
+                "version": "1.0.0",
+                "description": "x",
+                "gameVersion": "1.44.1",
+                "dependsOn": {"BSIPA": "^4.0.0"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    info = load_project(tmp_path / "TestMod.csproj")
+    result = assembly.set_project_version(info, "2.3.4-beta.1")
+    assert result["ok"] is True
+    text = (tmp_path / "Properties" / "AssemblyInfo.cs").read_text(encoding="utf-8")
+    assert 'AssemblyVersion("2.3.4.0")' in text
+    assert json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))["version"] == "2.3.4-beta.1"
+    assert result["comparison"]["match"] is True

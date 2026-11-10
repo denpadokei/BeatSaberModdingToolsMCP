@@ -107,6 +107,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("project")
     p.add_argument("-c", "--configuration", default="Debug")
 
+    p = sub.add_parser("set-version", help="Set manifest and AssemblyInfo versions together")
+    p.add_argument("project")
+    p.add_argument("version")
+    p.add_argument("--no-manifest", action="store_true")
+    p.add_argument("--no-assembly", action="store_true")
+    p.add_argument("--dry-run", action="store_true")
+
     p = sub.add_parser("compare", help="Compare manifest and assembly versions")
     p.add_argument("manifest_version")
     p.add_argument("assembly_version")
@@ -273,7 +280,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 result["ok"] = True
             else:
                 base = Path(args.base) if args.base else path
+                if base and not base.is_absolute():
+                    base = info.directory / base
                 target = Path(args.target) if args.target else (path or info.directory / "manifest.json")
+                if not target.is_absolute():
+                    target = info.directory / target
                 payload: dict[str, Any] = {}
                 for key, value in (
                     ("name", args.name),
@@ -297,7 +308,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if not args.no_embed:
                     from .project import ensure_manifest_embedded
 
-                    generated["embed"] = ensure_manifest_embedded(load_project(info.path), manifest_rel="manifest.json")
+                    try:
+                        relative = target.resolve().relative_to(info.directory.resolve()).as_posix()
+                    except ValueError:
+                        relative = "manifest.json"
+                    generated["embed"] = ensure_manifest_embedded(load_project(info.path), manifest_rel=relative)
                 result = {"ok": True, **generated}
         elif args.command == "assembly":
             info = load_project(args.project)
@@ -306,6 +321,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "assembly": assembly.read_assembly_info(info),
                 "comparison": assembly.compare_project_versions(info),
             }
+        elif args.command == "set-version":
+            info = load_project(args.project)
+            result = assembly.set_project_version(
+                info,
+                args.version,
+                update_manifest=not args.no_manifest,
+                update_assembly=not args.no_assembly,
+                dry_run=args.dry_run,
+            )
         elif args.command == "compare":
             result = assembly.compare_versions(args.manifest_version, args.assembly_version)
             result["ok"] = True

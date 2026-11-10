@@ -664,6 +664,7 @@ def add_references(
     metadata_indent = reference_indent + "  "
     hint_root = hint_root.rstrip("\\/")
     existing = {ref.name.lower(): ref for ref in info.references}
+    seen = set(existing)
     added: list[str] = []
     updated: list[str] = []
     skipped: list[str] = []
@@ -672,11 +673,14 @@ def add_references(
         relative = reference.relative_dir.replace("/", "\\")
         hint = f"{hint_root}\\{relative}\\{reference.name}.dll"
         key = reference.name.lower()
-        if key in existing:
-            outcome = _handle_duplicate_reference(info, existing[key], hint, force)
-            if outcome == "updated":
-                updated.append(reference.name)
-            elif outcome == "skipped":
+        if key in seen:
+            if key in existing:
+                outcome = _handle_duplicate_reference(info, existing[key], hint, force)
+                if outcome == "updated":
+                    updated.append(reference.name)
+                elif outcome == "skipped":
+                    skipped.append(reference.name)
+            else:
                 skipped.append(reference.name)
             continue
         element = etree.Element(_qualified(info, "Reference"))
@@ -692,6 +696,7 @@ def add_references(
         specific.tail = "\n" + reference_indent
         new_elements.append(element)
         added.append(reference.name)
+        seen.add(key)
     if new_elements:
         _create_item_group(info, new_elements)
     if not dry_run and (added or updated):
@@ -732,7 +737,7 @@ def remove_references(
             continue
         parent.remove(reference.element)
         removed.append(reference.name)
-        if not any(isinstance(child.tag, str) for child in parent):
+        if len(parent) == 0:
             grandparent = parent.getparent()
             if grandparent is not None:
                 grandparent.remove(parent)
@@ -823,6 +828,16 @@ def set_game_properties(
         values["GameDirectory"] = str(game_dir)
     if set_reference_path:
         values["ReferencePath"] = ";".join(str(game_dir / relative) for relative in REFERENCE_DIRS)
+    return set_property_values(info, values, target=target)
+
+
+def set_property_values(
+    info: ProjectInfo,
+    values: dict[str, str],
+    *,
+    target: str = "auto",
+) -> dict[str, Any]:
+    """Set one or more MSBuild properties in the project / user file / props file."""
 
     if target not in {"auto", "user", "project", "props"}:
         raise BsmtError(f"Unknown target: {target}", hint="Use auto, user, project or props.")
@@ -846,6 +861,7 @@ def set_game_properties(
     for path in candidates:
         if path is None:
             continue
+        created = not path.is_file()
         if path.is_file():
             tree, original = _parse_tree(path)
         else:
@@ -860,7 +876,7 @@ def set_game_properties(
                         "property": name,
                         "old": old,
                         "new": value,
-                        "created": not path.is_file(),
+                        "created": created,
                     }
                 )
                 file_changed = True

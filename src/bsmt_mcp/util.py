@@ -8,6 +8,7 @@ import locale
 import os
 import re
 import shutil
+import stat
 import subprocess
 import time
 from collections.abc import Iterable, Mapping, Sequence
@@ -257,6 +258,38 @@ def copy_file(src: str | os.PathLike[str], dst: str | os.PathLike[str]) -> Path:
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, target)
     return target
+
+
+def remove_tree(path: str | os.PathLike[str]) -> None:
+    """Remove a directory tree even on OneDrive/read-only/ReparsePoint folders.
+
+    ``shutil.rmtree`` fails on Windows when a directory has the read-only
+    attribute or is a cloud-sync reparse point. Clear the attribute, retry, and
+    finally fall back to ``cmd /c rd`` which handles junctions.
+    """
+
+    target = Path(path)
+    if not target.exists():
+        return
+
+    def onerror(func, failed_path, _exc_info) -> None:  # type: ignore[no-untyped-def]
+        failed = Path(failed_path)
+        with contextlib.suppress(OSError):
+            os.chmod(failed, stat.S_IWRITE | stat.S_IREAD)
+        try:
+            func(failed_path)
+            return
+        except OSError:
+            pass
+        if os.name == "nt":
+            if failed.is_dir():
+                subprocess.run(["cmd", "/c", "rd", "/s", "/q", str(failed)], capture_output=True, timeout=120)
+            else:
+                subprocess.run(["cmd", "/c", "del", "/f", "/q", str(failed)], capture_output=True, timeout=120)
+        else:
+            raise
+
+    shutil.rmtree(target, onerror=onerror)
 
 
 def human_size(num_bytes: int) -> str:

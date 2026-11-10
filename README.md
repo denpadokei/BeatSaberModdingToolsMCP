@@ -106,6 +106,7 @@ bsmt doctor
 | Reference copies for offline/CI builds | `copy_game_references` |
 | Project templates | `create_project` |
 | `GenerateManifest` | `generate_manifest` |
+| Version bumps (manifest + assembly together) | `set_version` |
 | `GetManifestInfo` / manifest validation | `read_manifest`, `validate_manifest` |
 | `GetAssemblyInfo` / `CompareVersions` | `get_assembly_info`, `compare_versions` |
 | `GetCommitInfo` | `get_git_info` |
@@ -143,8 +144,8 @@ Read-only tools: `detect_game`, `build_environment`, `game_process_status`,
 `get_assembly_info`, `compare_versions`, `get_git_info`.
 
 Mutating tools: `add_game_references`, `remove_game_references`, `set_game_directory`,
-`copy_game_references`, `create_project`, `generate_manifest`, `build_mod`, `package_mod`,
-`deploy_mod`, `replace_in_file`.
+`copy_game_references`, `create_project`, `generate_manifest`, `set_version`, `build_mod`,
+`package_mod`, `deploy_mod`, `replace_in_file`.
 
 ### Recommended workflow
 
@@ -152,7 +153,8 @@ Mutating tools: `add_game_references`, `remove_game_references`, `set_game_direc
 2. `inspect_project` — see whether references, `BeatSaberDir`, and the manifest are sane.
 3. `set_game_directory` — write `BeatSaberDir`/`GameDirectory` if the project does not resolve them.
 4. `add_game_references` — add missing DLLs; start with `presets=["core","bsipa"]`.
-5. `generate_manifest` — merge fields, validate, and embed the manifest.
+5. `generate_manifest` — merge fields, validate, and embed the manifest. Use `set_version` when
+   bumping the version so the manifest and `AssemblyInfo.cs` stay in sync.
 6. `build_mod` with `package=true` and `deploy=true`.
 
 Agents should check `ok` in the returned JSON. `build_mod` returns `ok=false` with parsed
@@ -224,6 +226,7 @@ bsmt setup PROJECT [--game PATH] [--target auto|user|project|props] [--reference
 bsmt manifest show PROJECT
 bsmt manifest validate PROJECT
 bsmt manifest generate PROJECT [--version 1.2.3] [--game-version 1.44.1] [--depends-on BSIPA=^4.3.0]
+bsmt set-version PROJECT VERSION [--no-manifest] [--no-assembly] [--dry-run]
 bsmt assembly PROJECT
 bsmt compare MANIFEST_VERSION ASSEMBLY_VERSION
 bsmt git PROJECT

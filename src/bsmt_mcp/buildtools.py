@@ -13,13 +13,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import beatsaber
+from . import assembly, beatsaber
 from .beatsaber import BeatSaberInstall
 from .errors import BuildError, DeployError
 from .gitinfo import git_info
 from .project import ProjectInfo, glob_output_copy, load_project, resolve_project_game_dir
 from .toolchain import BuildTool, evaluate_properties, find_dotnet, get_build_tool, list_msbuilds
 from .util import (
+    remove_tree,
     run_process,
     safe_relative_path,
     tail_lines,
@@ -224,6 +225,13 @@ def build_mod(
             "manifest.json exists but is not embedded in the assembly. BSIPA will load the plugin without "
             "metadata (and BeatMods may reject it). Run ensure_manifest_embedding or generate_manifest with embed=True."
         )
+    version_check = assembly.compare_project_versions(info)
+    if version_check.get("checked") and not version_check.get("match"):
+        preflight.append(
+            f"Manifest version {version_check.get('manifest_version')} does not match assembly version "
+            f"{version_check.get('assembly_version')}; Release builds with BeatSaberModdingTools.Tasks fail "
+            "with BSMT01. Run set_version or update AssemblyInfo.cs."
+        )
 
     started = time.monotonic()
     result = run_process(command, cwd=info.directory, timeout=options.timeout)
@@ -291,7 +299,7 @@ def _clean_artifact(info: ProjectInfo, directory: Path) -> None:
     if directory in dangerous or not directory.name:
         raise BuildError(f"Refusing to clean unsafe artifact directory: {directory}")
     if directory.exists():
-        shutil.rmtree(directory)
+        remove_tree(directory)
     directory.mkdir(parents=True, exist_ok=True)
 
 

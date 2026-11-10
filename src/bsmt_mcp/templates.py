@@ -42,8 +42,7 @@ def _csproj_xml(identifier: str, framework: str, has_game: bool) -> str:
     if not has_game:
         reference_block = """
   <ItemGroup>
-    <!-- No game references were generated. Add them with:
-         bsmt refs add --project <this file> --preset core -->
+    <!-- No game references were generated yet. See the README for the refs add command. -->
   </ItemGroup>
 """
     return f"""<Project Sdk="Microsoft.NET.Sdk">
@@ -306,6 +305,12 @@ def create_project(
         result["references_added"] = added["added"]
         set_game_properties(info, game_dir=install.path)
         result["user_file"] = str(info.user_file)
+        result["warnings"] = warnings
+    else:
+        warnings.append(
+            "No game references were added (no game_dir/game_version detection). "
+            "Pass game_dir or run add_game_references later."
+        )
         result["warnings"] = warnings
     result["next_steps"] = [
         "Edit manifest.json (author, description, gameVersion).",

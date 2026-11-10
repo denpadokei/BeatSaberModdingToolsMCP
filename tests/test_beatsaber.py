@@ -56,6 +56,24 @@ def test_version_from_globalgamemanagers(tmp_path) -> None:
     assert beatsaber.version_from_globalgamemanagers(game) == "1.44.1"
 
 
+def test_version_from_globalgamemanagers_build(tmp_path) -> None:
+    game = make_fake_game(tmp_path / "game")
+    marker = b"public.app-category.games"
+    data = b"prefix" + marker + b"\x00" * 32 + b"1.44.1_20239\x00rest"
+    (game / "Beat Saber_Data" / "globalgamemanagers").write_bytes(data)
+    assert beatsaber.version_from_globalgamemanagers(game) == "1.44.1_20239"
+    assert beatsaber.detect_game_version(game) == ("1.44.1", "20239", "globalgamemanagers")
+
+
+def test_detect_game_version_prefers_globalgamemanagers(tmp_path) -> None:
+    game = make_fake_game(tmp_path / "game")
+    (game / "BeatSaberVersion.txt").write_text("1.45.0_26420", encoding="utf-8")
+    marker = b"public.app-category.games"
+    data = marker + b"\x00" * 32 + b"1.45.3_30054\x00rest"
+    (game / "Beat Saber_Data" / "globalgamemanagers").write_bytes(data)
+    assert beatsaber.detect_game_version(game) == ("1.45.3", "30054", "globalgamemanagers")
+
+
 def test_detect_explicit_install(tmp_path) -> None:
     game = make_fake_game(tmp_path / "game")
     installs = beatsaber.detect_installs([str(game)], include_steam=False, include_oculus=False, include_bsmanager=False)
