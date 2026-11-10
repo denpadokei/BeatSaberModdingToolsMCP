@@ -370,6 +370,7 @@ def create_server() -> MCPServer:
     )
     def generate_manifest_tool(
         project: str,
+        mod_id: str | None = None,
         name: str | None = None,
         author: str | None = None,
         version: str | None = None,
@@ -399,6 +400,7 @@ def create_server() -> MCPServer:
             target_path = info.directory / target_path
         payload: dict[str, Any] = {}
         for key, value in (
+            ("id", mod_id),
             ("name", name),
             ("author", author),
             ("version", version),

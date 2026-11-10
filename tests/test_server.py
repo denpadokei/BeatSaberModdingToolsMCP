@@ -120,3 +120,43 @@ def test_inspect_project_tool(tmp_path, monkeypatch) -> None:
     data = result.structured_content
     assert data["project"]["assembly_name"] == "TestMod"
     assert data["manifest"]["id"] == "TestMod"
+
+
+def test_generate_manifest_tool_creates_new_manifest(tmp_path) -> None:
+    project = tmp_path / "NewMod.csproj"
+    project.write_text(
+        """<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>NewMod</AssemblyName>
+    <RootNamespace>NewMod</RootNamespace>
+  </PropertyGroup>
+</Project>
+""",
+        encoding="utf-8",
+    )
+
+    async def check():
+        server = create_server()
+        return await server.call_tool(
+            "generate_manifest",
+            {
+                "project": str(project),
+                "mod_id": "NewMod",
+                "name": "New Mod",
+                "author": "Tester",
+                "version": "0.1.0",
+                "game_version": "1.44.1",
+                "description": "A test plugin.",
+                "depends_on": {"BSIPA": "^4.3.0"},
+            },
+        )
+
+    result = run(check())
+    assert result.is_error is False
+    data = result.structured_content
+    assert data["ok"] is True
+    assert data["manifest"]["id"] == "NewMod"
+    assert (tmp_path / "manifest.json").is_file()
+    assert data["embed"]["changed"] is True
+    assert "<EmbeddedResource" in project.read_text(encoding="utf-8")

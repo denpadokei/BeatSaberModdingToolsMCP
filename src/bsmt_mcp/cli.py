@@ -92,6 +92,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_validate.add_argument("project")
     p_gen = m.add_parser("generate", help="Generate/merge the manifest")
     p_gen.add_argument("project")
+    p_gen.add_argument("--id")
     p_gen.add_argument("--name")
     p_gen.add_argument("--author")
     p_gen.add_argument("--version")
@@ -294,6 +295,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     target = info.directory / target
                 payload: dict[str, Any] = {}
                 for key, value in (
+                    ("id", args.id),
                     ("name", args.name),
                     ("author", args.author),
                     ("version", args.version),

@@ -226,7 +226,7 @@ bsmt refs copy PROJECT [--destination DIR] [--game PATH] [--no-set-dir]
 bsmt setup PROJECT [--game PATH] [--target auto|user|project|props] [--reference-path]
 bsmt manifest show PROJECT
 bsmt manifest validate PROJECT
-bsmt manifest generate PROJECT [--version 1.2.3] [--game-version 1.44.1] [--depends-on BSIPA=^4.3.0]
+bsmt manifest generate PROJECT [--id ID] [--version 1.2.3] [--game-version 1.44.1] [--depends-on BSIPA=^4.3.0]
 bsmt set-version PROJECT VERSION [--no-manifest] [--no-assembly] [--dry-run]
 bsmt assembly PROJECT
 bsmt compare MANIFEST_VERSION ASSEMBLY_VERSION
