@@ -1,0 +1,66 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "beat-saber-modding-tools-mcp"
+version = "0.1.0"
+description = "MCP server and CLI that replace the BeatSaberModdingTools Visual Studio extension and MSBuild tasks when building Beat Saber mods without Visual Studio."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "denpadokei" }]
+keywords = ["beat-saber", "bsipa", "modding", "mcp", "msbuild", "visual-studio"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Build Tools",
+  "Typing :: Typed",
+]
+dependencies = [
+  "mcp>=2.0,<3",
+  "lxml>=5.0",
+  "psutil>=5.9",
+]
+
+[project.scripts]
+bsmt = "bsmt_mcp.cli:main"
+bsmt-mcp = "bsmt_mcp.server:main"
+# Alias so `uvx --from git+<url> run ...` works as well as `... bsmt-mcp`.
+run = "bsmt_mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/denpadokei/BeatSaberModdingToolsMCP"
+Issues = "https://github.com/denpadokei/BeatSaberModdingToolsMCP/issues"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bsmt_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+  "integration: tests that need local Beat Saber files or MSBuild",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]

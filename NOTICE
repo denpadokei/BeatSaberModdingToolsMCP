@@ -1,0 +1,23 @@
+Beat Saber Modding Tools MCP
+Copyright (c) 2026 denpadokei
+
+This project is an independent reimplementation of the workflow provided by:
+
+  BeatSaberModdingTools
+  https://github.com/Zingabopp/BeatSaberModdingTools
+  Released into the public domain (Unlicense).
+
+  BeatSaberModdingTools.Tasks
+  https://github.com/Zingabopp/BeatSaberModdingTools.Tasks
+  MIT License, Copyright (c) 2020 Zingabopp.
+
+  denpadokei/BeatSaberModdingTools (fork)
+  https://github.com/denpadokei/BeatSaberModdingTools
+
+No source code from those projects is included in this repository. The behavior
+of the MSBuild tasks (manifest generation/validation, version comparison, zip
+layout, copy-to-game) was reimplemented in Python so the same workflow can be
+driven by an MCP client or CLI without Visual Studio.
+
+Beat Saber is a trademark of Beat Games. This project is not affiliated with
+Beat Games, BSMG, or the original authors.

@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ruff_cache/
+.pytest_cache/
+.pytest-tmp/
+.uv-cache/
+.nuget-packages/
+.dotnet-home/
+_scratch/
+_scratch*.py
+src/bsmt_mcp/_scratch*
